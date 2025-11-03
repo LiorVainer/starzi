@@ -15,7 +15,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
     const { path } = await params;
 
     return (
-        <main className='container flex grow flex-col items-center justify-center self-center p-8 md:p-6 scrollable bg-background rounded-lg'>
+        <main className='container flex grow flex-col items-center justify-center self-center p-8 md:p-6 scrollable'>
             <AccountView path={path} />
         </main>
     );

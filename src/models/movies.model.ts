@@ -28,6 +28,35 @@ export type FullyPopulatedMovie = Prisma.MovieGetPayload<{
     };
 }>;
 
+// Define the "fully populated movie" include
+// export const movieWithLanguageTranslationInclude = Prisma.validator<Prisma.MovieInclude>()({
+//     genres: {
+//         include: {
+//             translations: true,
+//         },
+//     },
+//     trailers: true,
+//     translations: true,
+//     cast: {
+//         include: {
+//             actor: {
+//                 include: {
+//                     translations: true,
+//                 },
+//             },
+//         },
+//         orderBy: { order: 'asc' },
+//     },
+// });
+//
+// export type MovieWithLanguageTranslationFull = Prisma.MovieGetPayload<{
+//     include: typeof movieWithLanguageTranslationInclude;
+// }>;
+//
+// const movie: MovieWithLanguageTranslationFull = {
+//
+// }
+
 export type MovieWithLanguageTranslation = {
     id: string;
     rating: number | null;
