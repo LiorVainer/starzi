@@ -1,5 +1,6 @@
 import { Language, Prisma, PrismaClient } from '@prisma/client';
 import { FullyPopulatedMovie, MovieWithLanguageTranslation } from '@/models/movies.model';
+import { redis } from '@/lib/upstash';
 
 /**
  * Movies Data Access Layer (DAL)
@@ -213,7 +214,12 @@ export class MoviesDAL {
      * Queries `movieTranslation` directly, prefers `language` if provided, orders by movie.rating and movie.votes.
      */
     async getBestRatedMoviePosters(limit = 12, language?: Language): Promise<string[]> {
-        // First, try to get translations in the preferred language (if provided)
+        const key = `bestRatedPosters:${language || 'any'}`;
+        const cached = await redis.get<string[]>(key);
+        if (cached) {
+            return cached;
+        }
+
         const preferredWhere: any = { posterUrl: { not: null } };
         if (language) preferredWhere.language = language;
 
@@ -226,22 +232,7 @@ export class MoviesDAL {
 
         const posters: string[] = preferred.map((p) => p.posterUrl!).filter(Boolean);
 
-        if (posters.length >= limit) return posters.slice(0, limit);
-
-        // Fill remaining slots with translations from other languages, excluding movies already included
-        // const excludedMovieIds = preferred.map((p) => p.movieId);
-        //
-        // const additional = await this.prisma.movieTranslation.findMany({
-        //     select: { movieId: true, posterUrl: true },
-        //     where: {
-        //         posterUrl: { not: null },
-        //         movie: { id: { notIn: excludedMovieIds.length ? excludedMovieIds : undefined } },
-        //     },
-        //     orderBy: [{ movie: { rating: 'desc' } }, { movie: { votes: 'desc' } }],
-        //     take: limit - posters.length,
-        // });
-
-        // posters.push(...additional.map((a) => a.posterUrl!).filter(Boolean));
+        await redis.set(key, posters, { ex: 60 * 60 * 24 });
 
         return posters;
     }

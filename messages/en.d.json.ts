@@ -2,120 +2,120 @@
 // See: https://next-intl.dev/docs/workflows/typescript#messages-arguments
 
 declare const messages: {
-  "metadata": {
-    "title": "Starzi"
-  },
-  "general": {
-      "loading": "Loading...",
-      "error": "Error",
-      "retry": "Retry",
-      "follow": "Follow",
-      "following": "Following",
-      "next": "Next",
-      "previous": "Previous"
-  },
-  "nav": {
-    "signIn": "Login",
-    "language": "Language",
-    "details": "Details",
-    "search": "Search"
-  },
-  "userButton": {
-    "settings": "Settings",
-    "signOut": "Sign Out"
-  },
-  "languages": {
-    "en_US": "English",
-    "he_IL": "Hebrew"
-  },
-  "search": {
-    "placeholder": "Search movies...",
-    "loading": "Searching...",
-    "noResults": "No results found for the current filter.",
-    "errorLoading": "Error loading data. Please try again.",
-    "actorPlaceholder": "Filter by actor name...",
-    "modalTitle": "Search movies"
-  },
-  "rating": {
-    "votes": "{count, plural, =0 {no votes} one {# vote} other {# votes}}"
-  },
-  "movie": {
-    "details": "Details",
-    "rating": "Rating",
-    "releaseDate": "Release Date",
-    "close": "Close",
-    "cast": "Cast",
-    "andMore": "and {count, plural, one {# more actor} other {# more actors}}...",
-    "showAll": "Show All",
-    "showLess": "Show Less",
-    "trailers": "Trailers"
-  },
-  "actor": {
-    "notFound": "Actor Not Found",
-    "pageDescription": "View {name}'s profile and filmography",
-    "backToMovie": "Back to Movie",
-    "loading": "Loading actor details...",
-    "errorLoading": "Failed to load actor details",
-    "biography": "Biography",
-    "credits": "Career",
-    "title": "Title",
-    "character": "Character",
-    "releaseYear": "Release Year",
-    "unknown": "Unknown",
-    "cancel": "Cancel",
-    "signInToFollow": {
-      "title": "Want to follow {actorName}?",
-      "description": "Sign in to get notified whenever a new movie featuring {actorName} is released — never miss a premiere.",
-      "action": "Sign in now"
-    },
-    "followingToast": "You're now following {name}",
-    "unfollowedToast": "You unfollowed {name}"
-  },
-  "landing": {
-    "title": "Discover movies worth your time",
-    "subtitle": "See what’s playing in the cinemas, track IMDb ratings, and get alerts for new movies releases you’ll love.",
-    "cta_now_playing": "See Now Playing",
-    "cta_subscribe": "Register for updates",
-    "top_rated_title": "Top Rated"
-  },
-  "filters": {
-    "sortBy": "Sort by",
-    "genre": "Genre",
-    "actor": "Actor",
-    "clear": "Clear",
-    "clearAll": "Clear All"
-  },
-  "genres": {
-    "title": "Genres",
-    "filter": "Filter genres",
-    "filterPlaceholder": "Filter...",
-    "noGenresFound": "No genres found",
-    "selected": "{count, plural, =0 {none selected} one {# selected} other {# selected}}",
-    "noFilter": "No filter",
-    "clearSelection": "Clear genre selection",
-    "removeGenre": "Remove {name}"
-  },
-  "sort": {
-    "ratingDesc": "Rating: High to Low",
-    "ratingAsc": "Rating: Low to High",
-    "votesDesc": "Most Votes",
-    "releaseDateDesc": "Newest",
-    "releaseDateAsc": "Oldest"
-  },
-  "dates": {
-    "today": "Today",
-    "daysAgo": "{count, plural, one {# day ago} other {# days ago}}",
-    "weeksAgo": "{count, plural, one {# week ago} other {# weeks ago}}",
-    "monthsAgo": "{count, plural, one {# month ago} other {# months ago}}",
-    "yearsAgo": "{count, plural, one {# year ago} other {# years ago}}",
-    "inDays": "{count, plural, one {in # day} other {in # days}}",
-    "inWeeks": "{count, plural, one {in # week} other {in # weeks}}",
-    "inMonths": "{count, plural, one {in # month} other {in # months}}",
-    "inYears": "{count, plural, one {in # year} other {in # years}}"
-  },
-  "time": {
-      "hours": "{count, plural, one {# hr} other {# hrs}}",
-      "minutes": "{count, plural, one {# min} other {# mins}}"
-  }
+    metadata: {
+        title: 'Starzi';
+    };
+    general: {
+        loading: 'Loading...';
+        error: 'Error';
+        retry: 'Retry';
+        follow: 'Follow';
+        following: 'Following';
+        next: 'Next';
+        previous: 'Previous';
+    };
+    nav: {
+        signIn: 'Login';
+        language: 'Language';
+        details: 'Details';
+        search: 'Search';
+    };
+    userButton: {
+        settings: 'Settings';
+        signOut: 'Sign Out';
+    };
+    languages: {
+        en_US: 'English';
+        he_IL: 'Hebrew';
+    };
+    search: {
+        placeholder: 'Search movies...';
+        loading: 'Searching...';
+        noResults: 'No results found for the current filter.';
+        errorLoading: 'Error loading data. Please try again.';
+        actorPlaceholder: 'Filter by actor name...';
+        modalTitle: 'Search movies';
+    };
+    rating: {
+        votes: '{count, plural, =0 {no votes} one {# vote} other {# votes}}';
+    };
+    movie: {
+        details: 'Details';
+        rating: 'Rating';
+        releaseDate: 'Release Date';
+        close: 'Close';
+        cast: 'Cast';
+        andMore: 'and {count, plural, one {# more actor} other {# more actors}}...';
+        showAll: 'Show All';
+        showLess: 'Show Less';
+        trailers: 'Trailers';
+    };
+    actor: {
+        notFound: 'Actor Not Found';
+        pageDescription: "View {name}'s profile and filmography";
+        backToMovie: 'Back to Movie';
+        loading: 'Loading actor details...';
+        errorLoading: 'Failed to load actor details';
+        biography: 'Biography';
+        credits: 'Career';
+        title: 'Title';
+        character: 'Character';
+        releaseYear: 'Release Year';
+        unknown: 'Unknown';
+        cancel: 'Cancel';
+        signInToFollow: {
+            title: 'Want to follow {actorName}?';
+            description: 'Sign in to get notified whenever a new movie featuring {actorName} is released — never miss a premiere.';
+            action: 'Sign in now';
+        };
+        followingToast: "You're now following {name}";
+        unfollowedToast: 'You unfollowed {name}';
+    };
+    landing: {
+        title: 'Discover movies worth your time';
+        subtitle: 'See what’s playing in the cinemas, track IMDb ratings, and get alerts for new movies releases you’ll love.';
+        cta_now_playing: 'See Now Playing';
+        cta_subscribe: 'Register for updates';
+        top_rated_title: 'Top Rated';
+    };
+    filters: {
+        sortBy: 'Sort by';
+        genre: 'Genre';
+        actor: 'Actor';
+        clear: 'Clear';
+        clearAll: 'Clear All';
+    };
+    genres: {
+        title: 'Genres';
+        filter: 'Filter genres';
+        filterPlaceholder: 'Filter...';
+        noGenresFound: 'No genres found';
+        selected: '{count, plural, =0 {none selected} one {# selected} other {# selected}}';
+        noFilter: 'No filter';
+        clearSelection: 'Clear genre selection';
+        removeGenre: 'Remove {name}';
+    };
+    sort: {
+        ratingDesc: 'Rating: High to Low';
+        ratingAsc: 'Rating: Low to High';
+        votesDesc: 'Most Votes';
+        releaseDateDesc: 'Newest';
+        releaseDateAsc: 'Oldest';
+    };
+    dates: {
+        today: 'Today';
+        daysAgo: '{count, plural, one {# day ago} other {# days ago}}';
+        weeksAgo: '{count, plural, one {# week ago} other {# weeks ago}}';
+        monthsAgo: '{count, plural, one {# month ago} other {# months ago}}';
+        yearsAgo: '{count, plural, one {# year ago} other {# years ago}}';
+        inDays: '{count, plural, one {in # day} other {in # days}}';
+        inWeeks: '{count, plural, one {in # week} other {in # weeks}}';
+        inMonths: '{count, plural, one {in # month} other {in # months}}';
+        inYears: '{count, plural, one {in # year} other {in # years}}';
+    };
+    time: {
+        hours: '{count, plural, one {# hr} other {# hrs}}';
+        minutes: '{count, plural, one {# min} other {# mins}}';
+    };
 };
 export default messages;

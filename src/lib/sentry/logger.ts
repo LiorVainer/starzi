@@ -38,35 +38,50 @@ function baseLog(level: LogLevel, message: string, scope?: string, extra?: Recor
     const prefixedMessage = scope ? `[${scope}] ${message}` : message;
     const normalizedExtra = normaliseExtra(extra);
 
-    Sentry.addBreadcrumb({
-        category: scope ?? 'app',
-        message,
-        level,
-        data: normalizedExtra,
-    });
-
-    const sentryLogMethod = level === 'warning' ? 'warn' : level;
-    Sentry.logger[sentryLogMethod](prefixedMessage, normalizedExtra);
-
+    // Local console output (always in dev; optional in prod)
+    const logger = consoleLogger[level];
     if (!isProduction) {
-        const logger = consoleLogger[level];
         logger(`${levelLabels[level]} ${prefixedMessage}`, extra ?? '');
-        return;
     }
 
-    if (level === 'error' && extra instanceof Error) {
-        Sentry.captureException(extra, {
+    // In production, capture only warnings & errors as full Sentry events
+    if (isProduction) {
+        if (level === 'error') {
+            if (extra instanceof Error) {
+                Sentry.captureException(extra, {
+                    level,
+                    tags: scope ? { scope } : undefined,
+                    extra: normalizedExtra,
+                });
+            } else {
+                Sentry.captureMessage(prefixedMessage, {
+                    level,
+                    tags: scope ? { scope } : undefined,
+                    extra: normalizedExtra,
+                });
+            }
+        } else if (level === 'warning') {
+            Sentry.captureMessage(prefixedMessage, {
+                level,
+                tags: scope ? { scope } : undefined,
+                extra: normalizedExtra,
+            });
+        }
+        // info/debug → no captureMessage (breadcrumb only)
+    }
+
+    // Always add breadcrumb for context (executed last)
+    try {
+        Sentry.addBreadcrumb({
+            category: scope ?? 'app',
+            message: prefixedMessage,
             level,
-            tags: scope ? { scope } : undefined,
+            data: normalizedExtra,
         });
-        return;
+    } catch (err) {
+        // silently ignore breadcrumb failures
+        console.warn('[LOGGER] Failed to add breadcrumb', err);
     }
-
-    Sentry.captureMessage(prefixedMessage, {
-        level,
-        tags: scope ? { scope } : undefined,
-        extra: normalizedExtra,
-    });
 }
 
 export const logger = {

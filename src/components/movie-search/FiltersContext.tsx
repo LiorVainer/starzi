@@ -5,12 +5,12 @@ import type { PropsWithChildren } from 'react';
 import { useLocale } from 'next-intl';
 import { mapLocaleToLanguage } from '@/constants/languages.const';
 import { useFiltersState, type FiltersState } from './useFilters';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { searchMoviesFiltered } from '@/app/actions/searchMovies';
+import { useQuery } from '@tanstack/react-query';
+import { searchNowPlayingMovies } from '@/app/actions/searchMovies';
 
 type QueryState = {
     isLoading: boolean;
-    data: Awaited<ReturnType<typeof searchMoviesFiltered>> | undefined;
+    data: Awaited<ReturnType<typeof searchNowPlayingMovies>> | undefined;
     isError: boolean;
 };
 
@@ -38,7 +38,7 @@ export function FiltersProvider({ children }: PropsWithChildren) {
             },
         ],
         queryFn: () =>
-            searchMoviesFiltered({
+            searchNowPlayingMovies({
                 ...filters.filters,
                 search: filters.searchDebounced,
                 actorName: filters.actorDebounced,

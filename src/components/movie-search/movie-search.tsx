@@ -1,10 +1,9 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import MovieCard from '@/components/movie/movie-card';
-import { listGenres, searchMoviesFiltered } from '@/app/actions/searchMovies';
-import { FilterBar } from '@/components/movie-search/FilterBar';
+import { listGenres } from '@/app/actions/searchMovies';
 import CollapsedMovieCardSkeleton from '@/components/movie/movie-card-collapsed.skeleton';
 import { useTranslations } from 'next-intl';
 import { FiltersProvider, useFilters } from '@/components/movie-search/FiltersContext';
@@ -40,9 +39,11 @@ export function MovieSearchContent() {
 
     return (
         <div className='h-full flex flex-col gap-4 lg:py-8 scrollable w-full'>
-            <div className='w-full'>
-                <SelectedGenreChips genres={genres} selected={selectedGenres} onRemove={toggleGenre} />
-            </div>
+            {selectedGenres.length > 0 && (
+                <div className='w-full'>
+                    <SelectedGenreChips genres={genres} selected={selectedGenres} onRemove={toggleGenre} />
+                </div>
+            )}
 
             {isError && <div className='text-destructive'>{t('errorLoading')}</div>}
 

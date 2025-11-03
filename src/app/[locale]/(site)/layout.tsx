@@ -8,7 +8,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         <LayoutGroup>
             <div className='absolute inset-0 pointer-events-none' />
             {/* === Page Content === */}
-            <div className='relative min-h-screen overflow-hidden' style={{ paddingTop: '3.25rem' }}>
+            <div className='relative min-h-screen overflow-hidden' style={{ paddingTop: '3.5rem' }}>
                 <Spotlight
                     gradientFirst={`
     radial-gradient(
