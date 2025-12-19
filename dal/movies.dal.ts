@@ -1,5 +1,8 @@
 import { Language, MovieStatus, Prisma, PrismaClient } from '@prisma/client';
+import { chunkArray } from '@/lib/ingestion/utils';
 import { FullyPopulatedMovie, MovieWithLanguageTranslation } from '@/models/movies.model';
+
+const MAX_BATCH = 400;
 
 /**
  * Movies Data Access Layer (DAL)
@@ -10,6 +13,11 @@ export class MoviesDAL {
 
     async findByTmdbId(tmdbId: number) {
         return this.prisma.movie.findUnique({ where: { tmdbId } });
+    }
+
+    async findManyByTmdbIds(tmdbIds: number[]) {
+        if (!tmdbIds.length) return [];
+        return this.prisma.movie.findMany({ where: { tmdbId: { in: tmdbIds } } });
     }
 
     /**
@@ -86,6 +94,20 @@ export class MoviesDAL {
         });
     }
 
+    async createManyBase(entries: Prisma.MovieCreateManyInput[], chunkSize = MAX_BATCH) {
+        const chunks = chunkArray(entries, chunkSize);
+        for (const chunk of chunks) {
+            await this.prisma.movie.createMany({ data: chunk, skipDuplicates: true });
+        }
+    }
+
+    async updateManyBase(argsList: Prisma.MovieUpdateManyArgs[], chunkSize = MAX_BATCH) {
+        const chunks = chunkArray(argsList, chunkSize);
+        for (const chunk of chunks) {
+            await Promise.all(chunk.map((args) => this.prisma.movie.updateMany(args)));
+        }
+    }
+
     async updateRating(imdbId: string, data: Pick<Prisma.MovieUpdateInput, 'rating' | 'votes'>) {
         return this.prisma.movie.update({
             where: { imdbId },
@@ -112,6 +134,20 @@ export class MoviesDAL {
         });
     }
 
+    async createTranslationsBulk(translations: Prisma.MovieTranslationCreateManyInput[], chunkSize = MAX_BATCH) {
+        const chunks = chunkArray(translations, chunkSize);
+        for (const chunk of chunks) {
+            await this.prisma.movieTranslation.createMany({ data: chunk, skipDuplicates: true });
+        }
+    }
+
+    async bulkInsertTrailers(trailers: Prisma.TrailerCreateManyInput[], chunkSize = MAX_BATCH) {
+        const chunks = chunkArray(trailers, chunkSize);
+        for (const chunk of chunks) {
+            await this.prisma.trailer.createMany({ data: chunk, skipDuplicates: true });
+        }
+    }
+
     async connectGenres(movieId: string, tmdbGenreIds: number[]) {
         if (!tmdbGenreIds.length) return;
 
@@ -133,6 +169,48 @@ export class MoviesDAL {
         });
     }
 
+    async bulkConnectGenres(payloads: { movieId: string; genreIds: string[] }[], chunkSize = MAX_BATCH) {
+        const chunks = chunkArray(payloads, chunkSize);
+        for (const chunk of chunks) {
+            await this.prisma.$transaction(
+                chunk.map((payload) =>
+                    this.prisma.movie.update({
+                        where: { id: payload.movieId },
+                        data: {
+                            genres: {
+                                set: payload.genreIds.map((id) => ({ id })),
+                            },
+                        },
+                    }),
+                ),
+            );
+        }
+    }
+
+    async bulkUpdateFallbackStatuses(currentStatus: MovieStatus, fallbackStatus: MovieStatus, tmdbIdsToKeep: number[]) {
+        const where: Prisma.MovieWhereInput = {
+            status: currentStatus,
+        };
+
+        if (tmdbIdsToKeep.length) {
+            where.tmdbId = { notIn: tmdbIdsToKeep };
+        }
+
+        return this.prisma.movie.updateMany({
+            where,
+            data: {
+                status: fallbackStatus,
+            },
+        });
+    }
+
+    /**
+     * Alias for bulkUpdateFallbackStatuses for backward compatibility
+     */
+    async markMissingMoviesAsFallback(currentStatus: MovieStatus, fallbackStatus: MovieStatus, tmdbIdsToKeep: number[]) {
+        return this.bulkUpdateFallbackStatuses(currentStatus, fallbackStatus, tmdbIdsToKeep);
+    }
+
     async upsertAllTrailers(movieId: string, trailers: { title: string; key: string; language: Language }[]) {
         for (const t of trailers) {
             const url = `https://www.youtube.com/watch?v=${t.key}`;
@@ -150,6 +228,13 @@ export class MoviesDAL {
                     youtubeId: t.key,
                 },
             });
+        }
+    }
+
+    async bulkUpsertTrailers(entries: Prisma.TrailerCreateManyInput[], chunkSize = MAX_BATCH) {
+        const chunks = chunkArray(entries, chunkSize);
+        for (const chunk of chunks) {
+            await this.prisma.trailer.createMany({ data: chunk, skipDuplicates: true });
         }
     }
 
@@ -314,28 +399,5 @@ export class MoviesDAL {
      */
     async countMovies(where?: Prisma.MovieWhereInput): Promise<number> {
         return this.prisma.movie.count({ where });
-    }
-
-    async markMissingMoviesAsFallback(
-        currentStatus: MovieStatus,
-        fallbackStatus: MovieStatus,
-        tmdbIdsToKeep: number[],
-    ): Promise<number> {
-        const where: Prisma.MovieWhereInput = {
-            status: currentStatus,
-        };
-
-        if (tmdbIdsToKeep.length) {
-            where.tmdbId = { notIn: tmdbIdsToKeep };
-        }
-
-        const result = await this.prisma.movie.updateMany({
-            where,
-            data: {
-                status: fallbackStatus,
-            },
-        });
-
-        return result.count;
     }
 }

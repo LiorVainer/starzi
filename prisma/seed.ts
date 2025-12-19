@@ -9,18 +9,11 @@ import { withSentrySpan } from '@/lib/sentry/withSpan';
 import { MovieStatus } from '@prisma/client';
 import { withSentryTransaction } from '@/lib/sentry/withTransaction';
 import * as Sentry from '@sentry/nextjs';
-import Bluebird from 'bluebird';
 
-import {
-    type MovieData,
-    type MovieProcessInput,
-    processMovieData,
-    processMovieTrailers,
-    processMovieTranslations,
-} from './seeders/movie-processor';
-import { cacheGenreTranslations, processMovieGenres } from './seeders/genre-processor';
-import { batchProcessActors } from './seeders/actor-processor';
-import { SEED_CONFIG } from './seeders/seed-config';
+import { ingestMoviesBatch } from '@/lib/ingestion/movieIngestion';
+import { MovieFeed } from '@/lib/ingestion/types';
+import { cacheGenreTranslations } from '@/lib/ingestion/cache';
+import { SEED_CONFIG } from '@/constants/seed-config';
 import { sendCatalogRefreshEmail } from '@/lib/email/sendCatalogRefreshEmail';
 
 type ScopedLogger = ReturnType<typeof logger.scope>;
@@ -28,7 +21,8 @@ type CatalogRefreshOptions = {
     wrapWithTransaction?: boolean;
 };
 
-type MovieFeedFetcher = () => Promise<{ results?: MovieProcessInput[] }>;
+type TmdbMovieResult = { id: number; title: string };
+type MovieFeedFetcher = () => Promise<{ results?: TmdbMovieResult[] }>;
 
 type CatalogRefreshConfig = {
     scope: string;
@@ -131,23 +125,8 @@ async function runCatalogRefreshJob(config: CatalogRefreshConfig, options: Catal
                 },
             );
 
-            const movies = moviesResponse.results ?? [];
-            const fetchedTmdbIds = Array.from(new Set(movies.map((movie) => movie.id)));
-
-            if (config.fallbackStatus) {
-                await runSpan(transactionLogger, `Marking movies missing from ${config.feedName}`, 'db', async () => {
-                    const affected = await dal.movies.markMissingMoviesAsFallback(
-                        config.movieStatus,
-                        config.fallbackStatus!,
-                        fetchedTmdbIds,
-                    );
-
-                    transactionLogger.info(
-                        `Updated ${affected} movies to status ${config.fallbackStatus} after ${config.feedName} sync`,
-                        { affected },
-                    );
-                });
-            }
+            const movies: MovieFeed[] = (moviesResponse.results ?? []).map((m) => ({ tmdbId: m.id, title: m.title }));
+            processedCount = movies.length;
 
             if (!movies.length) {
                 transactionLogger.warn('No movies found in TMDB feed.');
@@ -157,65 +136,11 @@ async function runCatalogRefreshJob(config: CatalogRefreshConfig, options: Catal
 
             transactionLogger.info(`Found ${movies.length} movies to process`);
 
-            const movieDataList = await runSpan(transactionLogger, 'Processing movie data', 'job.step', async () =>
-                Bluebird.map(
-                    movies,
-                    async (movie, index) => {
-                        if (index > 0) await wait(SEED_CONFIG.DB_OPERATION_DELAY / 2);
-                        return processMovieData(movie, dal, config.movieStatus);
-                    },
-                    { concurrency: SEED_CONFIG.MOVIE_PROCESSING_CONCURRENCY },
-                ),
-            );
-
-            const validMovieData = movieDataList.filter((data): data is MovieData => data !== null);
-
-            if (!validMovieData.length) {
-                transactionLogger.info('All movies already exist in DB.');
-                success = true;
-                return;
-            }
-
-            processedCount = validMovieData.length;
-
-            await runSpan(transactionLogger, 'Processing movie translations', 'job.step', async () => {
-                await Bluebird.map(
-                    validMovieData,
-                    (m, i) => (i > 0 ? wait(25) : Promise.resolve()).then(() => processMovieTranslations(m, dal)),
-                    {
-                        concurrency: SEED_CONFIG.TRANSLATION_PROCESSING_CONCURRENCY,
-                    },
-                );
-            });
-
-            await wait(SEED_CONFIG.DB_OPERATION_DELAY);
-
-            await runSpan(transactionLogger, 'Processing movie genres', 'job.step', async () => {
-                await Bluebird.map(
-                    validMovieData,
-                    (m, i) => (i > 0 ? wait(50) : Promise.resolve()).then(() => processMovieGenres(m, dal)),
-                    {
-                        concurrency: SEED_CONFIG.GENRE_PROCESSING_CONCURRENCY,
-                    },
-                );
-            });
-
-            await wait(SEED_CONFIG.DB_OPERATION_DELAY);
-
-            await runSpan(transactionLogger, 'Processing movie trailers', 'job.step', async () => {
-                await Bluebird.map(
-                    validMovieData,
-                    (m, i) => (i > 0 ? wait(25) : Promise.resolve()).then(() => processMovieTrailers(m, dal)),
-                    {
-                        concurrency: SEED_CONFIG.TRAILER_PROCESSING_CONCURRENCY,
-                    },
-                );
-            });
-
-            await wait(SEED_CONFIG.DB_OPERATION_DELAY * 2);
-
-            await runSpan(transactionLogger, 'Processing movie cast', 'job.step', async () => {
-                await batchProcessActors(validMovieData, dal);
+            await ingestMoviesBatch(dal, movies, {
+                language: SEED_CONFIG.DEFAULT_LANGUAGES.PRIMARY,
+                region: SEED_CONFIG.TMDB_REGION,
+                movieStatus: config.movieStatus,
+                fallbackStatus: config.fallbackStatus,
             });
 
             totalDuration = Date.now() - totalStartTime;
@@ -271,7 +196,7 @@ export async function refreshNowPlayingCatalog(options: CatalogRefreshOptions = 
             fallbackStatus: MovieStatus.LEFT_CINEMAS,
             fetchMovies: () =>
                 tmdb.movies.nowPlaying({
-                    language: SEED_CONFIG.DEFAULT_LANGUAGES.PRIMARY,
+                    language: SEED_CONFIG.TMDB_LANGUAGES.PRIMARY,
                     region: SEED_CONFIG.TMDB_REGION,
                 }),
         },
@@ -289,7 +214,7 @@ export async function refreshUpcomingCatalog(options: CatalogRefreshOptions = {}
             movieStatus: MovieStatus.UPCOMING,
             fetchMovies: () =>
                 tmdb.movies.upcoming({
-                    language: SEED_CONFIG.DEFAULT_LANGUAGES.PRIMARY,
+                    language: SEED_CONFIG.TMDB_LANGUAGES.PRIMARY,
                     region: SEED_CONFIG.TMDB_REGION,
                 }),
         },
@@ -320,30 +245,14 @@ export async function refreshSpecificMovie(tmdbId: number, options: CatalogRefre
                 async () => tmdb.movies.details(tmdbId),
             );
 
-            const movieData = await runSpan(transactionLogger, 'Processing movie data', 'job.step', async () =>
-                processMovieData(movieDetails, dal, MovieStatus.NOW_PLAYING),
-            );
-
-            if (!movieData) {
-                transactionLogger.info('Movie already existed with no updates detected');
-                return;
-            }
-
-            // Process all aspects of the movie
-            await runSpan(transactionLogger, 'Processing movie aspects', 'job.step', async () => {
-                await Bluebird.all([
-                    processMovieTranslations(movieData, dal),
-                    processMovieGenres(movieData, dal),
-                    processMovieTrailers(movieData, dal),
-                ]);
-            });
-
-            await runSpan(transactionLogger, 'Processing movie actors', 'job.step', async () => {
-                await batchProcessActors([movieData], dal);
+            await ingestMoviesBatch(dal, [{ tmdbId, title: movieDetails.title }], {
+                language: SEED_CONFIG.DEFAULT_LANGUAGES.PRIMARY,
+                region: SEED_CONFIG.TMDB_REGION,
+                movieStatus: MovieStatus.NOW_PLAYING,
             });
 
             const totalDuration = Date.now() - startTime;
-            transactionLogger.info(`Successfully refreshed movie: ${movieData.title}`);
+            transactionLogger.info(`Successfully refreshed movie: ${movieDetails.title}`);
             transactionLogger.info(`Finished at: ${new Date().toISOString()}`);
             transactionLogger.info(`Total time: ${formatDuration(totalDuration)}`, { durationMs: totalDuration });
         } catch (error) {
