@@ -53,7 +53,10 @@ export class ActorsDAL {
 
     /**
      * Fetches an actor by ID with all translations
-     */
+     {{{}
+}
+}
+}
     async findByIdWithTranslations(actorId: string) {
         return this.prisma.actor.findUnique({
             where: { id: actorId },

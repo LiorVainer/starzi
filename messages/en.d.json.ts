@@ -34,7 +34,9 @@ declare const messages: {
     "noResults": "No results found for the current filter.",
     "errorLoading": "Error loading data. Please try again.",
     "actorPlaceholder": "Filter by actor name...",
-    "modalTitle": "Search movies"
+    "modalTitle": "Search movies",
+    "nowPlaying": "Now Playing",
+    "upcoming": "Coming Soon"
   },
   "rating": {
     "votes": "{count, plural, =0 {no votes} one {# vote} other {# votes}}"

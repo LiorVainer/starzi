@@ -2,7 +2,7 @@
 
 import { getDal } from '@/lib/server-utils';
 import type { Language } from '@prisma/client';
-import { omdb, tmdb } from '@/lib/clients';
+import { omdb, tmdb } from '@/lib/api-clients';
 import { TMDB } from '@/constants/movies/api';
 import { ActorCreditDto, ActorDetailsDto } from '@/models/actors.model';
 import { mapLocalToTmdbLanguage } from '@/constants/languages.const';

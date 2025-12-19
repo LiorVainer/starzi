@@ -31,7 +31,9 @@
     "noResults": "לא נמצאו תוצאות לפי הסינון הנוכחי.",
     "errorLoading": "שגיאה בטעינת הנתונים. נסה שוב.",
     "actorPlaceholder": "סנן לפי שחקן...",
-    "modalTitle": "חיפוש סרטים"
+    "modalTitle": "חיפוש סרטים",
+    "nowPlaying": "כרגע בקולנוע",
+    "upcoming": "בקרוב"
   },
   "rating": {
     "votes": "{count, plural, =0 {אין הצבעות} one {הצבעה #} other {# הצבעות}}"

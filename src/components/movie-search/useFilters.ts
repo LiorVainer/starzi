@@ -19,12 +19,17 @@ const DEFAULT_SORT: SortValue = 'rating:desc' as const;
 const DEFAULT_PAGE_SIZE = 24;
 const DEFAULT_PAGE = 1;
 
+export type TabValue = 'now-playing' | 'upcoming';
+const TAB_VALUES: TabValue[] = ['now-playing', 'upcoming'];
+const DEFAULT_TAB: TabValue = 'now-playing' as const;
+
 type RawFilters = {
     readonly search: string;
     readonly actor: string;
     readonly sort: SortValue;
     readonly genres: number[];
     readonly page: number;
+    readonly tab: TabValue;
 };
 
 const filterParsers = {
@@ -33,6 +38,7 @@ const filterParsers = {
     sort: parseAsStringEnum<SortValue>([...SORT_VALUES]).withDefault(DEFAULT_SORT),
     genres: parseAsArrayOf(parseAsInteger).withDefault([]),
     page: parseAsInteger.withDefault(DEFAULT_PAGE),
+    tab: parseAsStringEnum<TabValue>(TAB_VALUES).withDefault(DEFAULT_TAB),
 } satisfies UseQueryStatesKeysMap<RawFilters>;
 
 const DEFAULT_SET_OPTIONS = {
@@ -50,6 +56,7 @@ export type FiltersState = {
     readonly page: number;
     readonly pageSize: number;
     readonly language: Language;
+    readonly tab: TabValue;
     readonly filters: MovieFilters;
     setSearch: (next: string) => Promise<URLSearchParams>;
     setActorName: (next: string) => Promise<URLSearchParams>;
@@ -58,6 +65,7 @@ export type FiltersState = {
     clearGenres: () => Promise<URLSearchParams>;
     clearAll: () => Promise<URLSearchParams>;
     setPage: (page: number) => Promise<URLSearchParams>;
+    setTab: (tab: TabValue) => Promise<URLSearchParams>;
 };
 
 export function useFiltersState(language: Language): FiltersState {
@@ -167,7 +175,20 @@ export function useFiltersState(language: Language): FiltersState {
         [setRawFilters],
     );
 
-    const { search, actor, sort, genres, page } = rawFilters;
+    const setTab = useCallback(
+        (tab: TabValue) =>
+            setRawFilters(
+                (prev: RawFilters) => ({
+                    ...prev,
+                    tab,
+                    page: DEFAULT_PAGE,
+                }),
+                DEFAULT_SET_OPTIONS,
+            ),
+        [setRawFilters],
+    );
+
+    const { search, actor, sort, genres, page, tab } = rawFilters;
 
     const filters = useMemo<MovieFilters>(
         () => ({
@@ -194,6 +215,7 @@ export function useFiltersState(language: Language): FiltersState {
         page: rawFilters.page,
         pageSize: DEFAULT_PAGE_SIZE,
         language,
+        tab: rawFilters.tab,
         filters,
         setSearch,
         setActorName,
@@ -202,5 +224,6 @@ export function useFiltersState(language: Language): FiltersState {
         clearGenres,
         clearAll,
         setPage,
+        setTab,
     };
 }

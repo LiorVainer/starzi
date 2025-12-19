@@ -1,4 +1,4 @@
-import { tmdb } from '@/lib/clients';
+import { tmdb } from '@/lib/api-clients';
 import { Language } from '@prisma/client';
 import Bluebird from 'bluebird';
 import type { DAL } from '@/dal';
@@ -104,7 +104,10 @@ export async function processMovieGenres(movieData: MovieData, dal: DAL): Promis
                 }
             }
 
-            await dal.movies.connectGenres(baseMovie.id, detailsEn.genres.map((g) => g.id));
+            await dal.movies.connectGenres(
+                baseMovie.id,
+                detailsEn.genres.map((g) => g.id),
+            );
             genreLogger.info('Linked genres with movie', metadata);
             Sentry.logger.info('catalog.genre.linked_to_movie', metadata);
 
@@ -194,4 +197,3 @@ export function getCachedGenreTranslation(genreId: number, language: string): st
 export function clearProcessedGenresCache(): void {
     processedGenres.clear();
 }
-

@@ -1,5 +1,5 @@
-import { imdb, omdb, tmdb } from '@/lib/clients';
-import { MovieStatus, Language, Prisma } from '@prisma/client';
+import { imdb, omdb, tmdb } from '@/lib/api-clients';
+import { Language, MovieStatus, Prisma } from '@prisma/client';
 import Bluebird from 'bluebird';
 import type { DAL } from '@/dal';
 import * as Sentry from '@sentry/nextjs';
@@ -7,7 +7,7 @@ import { logger } from '@/lib/sentry/logger';
 import { withSentrySpan } from '@/lib/sentry/withSpan';
 import { SEED_CONFIG } from './seed-config';
 
-import type { Movie, MovieDetails, Video, ExternalIds } from 'tmdb-ts';
+import type { Movie, MovieDetails, Video } from 'tmdb-ts';
 import { extractImdbRatings } from '@/lib/imdb.utils';
 
 type TmdbVideosResponse = {
@@ -63,7 +63,6 @@ export async function processMovieData(
             try {
                 const existing = await dal.movies.findByTmdbId(movie.id);
                 if (existing) {
-                    // 🧩 Only fetch OMDB data — no TMDB calls
                     const omdbMovie = await omdb.title.getById({ i: existing.imdbId });
                     const imdbapiMovie = await imdb.titles.imDbApiServiceGetTitle({ titleId: existing.imdbId });
 
@@ -72,7 +71,6 @@ export async function processMovieData(
                         omdbMovie,
                     );
 
-                    // Optional optimization: only update if changed
                     if (existing.rating !== currentImdbRating || existing.votes !== currentImdbVotes) {
                         await dal.movies.updateRating(existing.imdbId, {
                             rating: currentImdbRating,

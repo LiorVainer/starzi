@@ -1,14 +1,16 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import MovieCard from '@/components/movie/movie-card';
-import { listGenres, searchMoviesFiltered } from '@/app/actions/searchMovies';
-import { FilterBar } from '@/components/movie-search/FilterBar';
+import { listGenres } from '@/app/actions/searchMovies';
 import CollapsedMovieCardSkeleton from '@/components/movie/movie-card-collapsed.skeleton';
 import { useTranslations } from 'next-intl';
 import { FiltersProvider, useFilters } from '@/components/movie-search/FiltersContext';
 import { SelectedGenreChips } from '@/components/movie-search/SelectedGenreChips';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { TabValue } from './useFilters';
+import type { MovieWithLanguageTranslation } from '@/models/movies.model';
 
 export function MovieSearchContent() {
     const t = useTranslations('search');
@@ -21,6 +23,8 @@ export function MovieSearchContent() {
         page,
         sort,
         searchDebounced,
+        tab,
+        setTab,
         data: moviesData,
         isLoading: isFetching,
         isError,
@@ -39,59 +43,124 @@ export function MovieSearchContent() {
     const genres = genresData ?? [];
 
     return (
-        <div className='h-full flex flex-col gap-4 lg:py-8 scrollable w-full'>
-            <div className='w-full'>
-                <SelectedGenreChips genres={genres} selected={selectedGenres} onRemove={toggleGenre} />
-            </div>
+        <Tabs value={tab} onValueChange={(value) => setTab(value as TabValue)} className='w-full'>
+            <TabsList className='mb-4'>
+                <TabsTrigger value='now-playing'>{t('nowPlaying')}</TabsTrigger>
+                <TabsTrigger value='upcoming'>{t('upcoming')}</TabsTrigger>
+            </TabsList>
 
-            {isError && <div className='text-destructive'>{t('errorLoading')}</div>}
+            <TabsContent value='now-playing' className='w-full'>
+                <div className='h-full flex flex-col gap-4 lg:py-8 scrollable w-full'>
+                    <div className='w-full'>
+                        <SelectedGenreChips genres={genres} selected={selectedGenres} onRemove={toggleGenre} />
+                    </div>
 
-            {isFetching && items.length === 0 ? (
-                <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-8'>
-                    {Array.from({ length: 9 }).map((_, i) => (
-                        <CollapsedMovieCardSkeleton key={i} />
-                    ))}
-                </div>
-            ) : (
-                <motion.div
-                    key={searchDebounced + sort + selectedGenresKey + page}
-                    className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 lg:gap-8'
-                    variants={{
-                        hidden: {},
-                        show: {
-                            transition: {
-                                staggerChildren: 0.07,
-                                delayChildren: 0.05,
-                            },
-                        },
-                    }}
-                    initial='hidden'
-                    animate='show'
-                >
-                    {items.map((movie) => (
+                    {isError && <div className='text-destructive'>{t('errorLoading')}</div>}
+
+                    {isFetching && items.length === 0 ? (
+                        <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-8'>
+                            {Array.from({ length: 9 }).map((_, i) => (
+                                <CollapsedMovieCardSkeleton key={i} />
+                            ))}
+                        </div>
+                    ) : (
                         <motion.div
-                            key={movie.id}
+                            key={searchDebounced + sort + selectedGenresKey + page}
+                            className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 lg:gap-8'
                             variants={{
-                                hidden: { opacity: 0, y: 20, scale: 0.98 },
+                                hidden: {},
                                 show: {
-                                    opacity: 1,
-                                    y: 0,
-                                    scale: 1,
-                                    transition: { type: 'spring', stiffness: 100, damping: 18 },
+                                    transition: {
+                                        staggerChildren: 0.07,
+                                        delayChildren: 0.05,
+                                    },
                                 },
                             }}
-                            className='w-full'
+                            initial='hidden'
+                            animate='show'
                         >
-                            <MovieCard ctaText={tMovie('details')} movie={movie} />
-                        </motion.div>
-                    ))}
+                            {items.map((movie: MovieWithLanguageTranslation) => (
+                                <motion.div
+                                    key={movie.id}
+                                    variants={{
+                                        hidden: { opacity: 0, y: 20, scale: 0.98 },
+                                        show: {
+                                            opacity: 1,
+                                            y: 0,
+                                            scale: 1,
+                                            transition: { type: 'spring', stiffness: 100, damping: 18 },
+                                        },
+                                    }}
+                                    className='w-full'
+                                >
+                                    <MovieCard ctaText={tMovie('details')} movie={movie} />
+                                </motion.div>
+                            ))}
 
-                    {items.length === 0 && !isFetching && (
-                        <div className='text-sm text-muted-foreground'>{t('noResults')}</div>
+                            {items.length === 0 && !isFetching && (
+                                <div className='text-sm text-muted-foreground'>{t('noResults')}</div>
+                            )}
+                        </motion.div>
                     )}
-                </motion.div>
-            )}
-        </div>
+                </div>
+            </TabsContent>
+
+            <TabsContent value='upcoming' className='w-full'>
+                <div className='h-full flex flex-col gap-4 lg:py-8 scrollable w-full'>
+                    <div className='w-full'>
+                        <SelectedGenreChips genres={genres} selected={selectedGenres} onRemove={toggleGenre} />
+                    </div>
+
+                    {isError && <div className='text-destructive'>{t('errorLoading')}</div>}
+
+                    {isFetching && items.length === 0 ? (
+                        <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-8'>
+                            {Array.from({ length: 9 }).map((_, i) => (
+                                <CollapsedMovieCardSkeleton key={i} />
+                            ))}
+                        </div>
+                    ) : (
+                        <motion.div
+                            key={searchDebounced + sort + selectedGenresKey + page}
+                            className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 lg:gap-8'
+                            variants={{
+                                hidden: {},
+                                show: {
+                                    transition: {
+                                        staggerChildren: 0.07,
+                                        delayChildren: 0.05,
+                                    },
+                                },
+                            }}
+                            initial='hidden'
+                            animate='show'
+                        >
+                            {items.map((movie: MovieWithLanguageTranslation) => (
+                                <motion.div
+                                    key={movie.id}
+                                    variants={{
+                                        hidden: { opacity: 0, y: 20, scale: 0.98 },
+                                        show: {
+                                            opacity: 1,
+                                            y: 0,
+                                            scale: 1,
+                                            transition: { type: 'spring', stiffness: 100, damping: 18 },
+                                        },
+                                    }}
+                                    className='w-full'
+                                >
+                                    <MovieCard ctaText={tMovie('details')} movie={movie} />
+                                </motion.div>
+                            ))}
+
+                            {items.length === 0 && !isFetching && (
+                                <div className='text-sm text-muted-foreground'>{t('noResults')}</div>
+                            )}
+                        </motion.div>
+                    )}
+                </div>
+            </TabsContent>
+        </Tabs>
     );
 }
 

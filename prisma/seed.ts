@@ -1,5 +1,7 @@
 import { createDALs } from '@/dal';
-import { tmdb } from '@/lib/clients';
+import { fileURLToPath } from 'url';
+import { basename } from 'path';
+import { tmdb } from '@/lib/api-clients';
 import { prisma } from '@/lib/prisma';
 import { PrismaService } from '@/lib/prismaService';
 import { logger } from '@/lib/sentry/logger';
@@ -9,9 +11,9 @@ import { withSentryTransaction } from '@/lib/sentry/withTransaction';
 import * as Sentry from '@sentry/nextjs';
 import Bluebird from 'bluebird';
 
-// Import our optimized processors
 import {
     type MovieData,
+    type MovieProcessInput,
     processMovieData,
     processMovieTrailers,
     processMovieTranslations,
@@ -24,6 +26,18 @@ import { sendCatalogRefreshEmail } from '@/lib/email/sendCatalogRefreshEmail';
 type ScopedLogger = ReturnType<typeof logger.scope>;
 type CatalogRefreshOptions = {
     wrapWithTransaction?: boolean;
+};
+
+type MovieFeedFetcher = () => Promise<{ results?: MovieProcessInput[] }>;
+
+type CatalogRefreshConfig = {
+    scope: string;
+    transactionName: string;
+    feedName: string;
+    sourceTag: string;
+    movieStatus: MovieStatus;
+    fetchMovies: MovieFeedFetcher;
+    fallbackStatus?: MovieStatus;
 };
 
 const prismaService = new PrismaService(prisma);
@@ -73,19 +87,25 @@ async function runSpan<T>(log: ScopedLogger, description: string, op: string, op
     });
 }
 
-export async function refreshNowPlayingCatalog(options: CatalogRefreshOptions = {}): Promise<void> {
+async function runCatalogRefreshJob(config: CatalogRefreshConfig, options: CatalogRefreshOptions = {}): Promise<void> {
     const { wrapWithTransaction = true } = options;
-    const transactionLogger = logger.scope('catalog-refresh:now-playing');
+    const transactionLogger = logger.scope(config.scope);
 
     const executeSeed = async () => {
         const totalStartTime = Date.now();
         const refreshContext = {
             startedAt: new Date().toISOString(),
             source: 'catalog-refresh',
+            feed: config.feedName,
         };
 
+        let success = false;
+        let processedCount = 0;
+        let errorMessage: string | undefined;
+        let totalDuration = 0;
+
         try {
-            transactionLogger.info('Starting daily catalog refresh process...');
+            transactionLogger.info(`Starting ${config.feedName} catalog refresh process...`);
             transactionLogger.info(`Started at: ${new Date().toISOString()}`);
             Sentry.logger.info('catalog.refresh.start', refreshContext);
             Sentry.withScope((scope) => {
@@ -95,164 +115,186 @@ export async function refreshNowPlayingCatalog(options: CatalogRefreshOptions = 
                 Sentry.captureMessage('catalog.refresh.start');
             });
 
-            // Step 1: Cache genre translations upfront to avoid repeated API calls
             await runSpan(transactionLogger, 'Genre translations caching', 'db', async () => {
                 await cacheGenreTranslations();
             });
 
-            // Add delay to let connections settle
             await wait(SEED_CONFIG.DB_OPERATION_DELAY);
 
-            // Step 2: Fetch now-playing movies
-            const nowPlaying = await runSpan(transactionLogger, 'Fetching now-playing movies', 'external', async () => {
-                transactionLogger.info('Fetching now-playing movies from TMDB');
-                return tmdb.movies.nowPlaying({
-                    language: SEED_CONFIG.DEFAULT_LANGUAGES.PRIMARY,
-                    region: SEED_CONFIG.TMDB_REGION,
-                });
-            });
-
-            if (!nowPlaying.results?.length) {
-                transactionLogger.warn('No movies found in TMDB feed.');
-                Sentry.logger.warn('catalog.refresh.no_results', { source: 'tmdb.now_playing' });
-                Sentry.withScope((scope) => {
-                    scope.setLevel('warning');
-                    scope.setTag('job', 'catalog-refresh');
-                    scope.setContext('refresh', refreshContext);
-                    Sentry.captureMessage('catalog.refresh.no_results');
-                });
-                return;
-            }
-
-            transactionLogger.info(`Found ${nowPlaying.results.length} movies to process`);
-
-            // Step 3: Process basic movie data with reduced concurrency
-            const movieDataList = await runSpan(
+            const moviesResponse = await runSpan(
                 transactionLogger,
-                'Processing movie data in parallel',
-                'job.step',
+                `Fetching ${config.feedName} movies`,
+                'external',
                 async () => {
-                    transactionLogger.info('Processing movie data with controlled concurrency');
-                    return Bluebird.map(
-                        nowPlaying.results,
-                        async (movie, index) => {
-                            if (index > 0) {
-                                await wait(SEED_CONFIG.DB_OPERATION_DELAY / 2);
-                            }
-                            return processMovieData(movie, dal, MovieStatus.NOW_PLAYING);
-                        },
-                        { concurrency: SEED_CONFIG.MOVIE_PROCESSING_CONCURRENCY },
-                    );
+                    transactionLogger.info(`Fetching ${config.feedName} movies from TMDB`);
+                    return config.fetchMovies();
                 },
             );
 
-            // Filter out null results and add delay
-            const validMovieData = movieDataList.filter((data): data is MovieData => data !== null);
+            const movies = moviesResponse.results ?? [];
+            const fetchedTmdbIds = Array.from(new Set(movies.map((movie) => movie.id)));
 
-            if (!validMovieData.length) {
-                const totalDuration = Date.now() - totalStartTime;
-                transactionLogger.info('All movies already exist in database. Catalog refresh complete!');
-                transactionLogger.info(`Total time: ${formatDuration(totalDuration)}`, { durationMs: totalDuration });
+            if (config.fallbackStatus) {
+                await runSpan(transactionLogger, `Marking movies missing from ${config.feedName}`, 'db', async () => {
+                    const affected = await dal.movies.markMissingMoviesAsFallback(
+                        config.movieStatus,
+                        config.fallbackStatus!,
+                        fetchedTmdbIds,
+                    );
+
+                    transactionLogger.info(
+                        `Updated ${affected} movies to status ${config.fallbackStatus} after ${config.feedName} sync`,
+                        { affected },
+                    );
+                });
+            }
+
+            if (!movies.length) {
+                transactionLogger.warn('No movies found in TMDB feed.');
+                Sentry.logger.warn('catalog.refresh.no_results', { source: config.sourceTag });
                 return;
             }
 
-            transactionLogger.info(`Processing ${validMovieData.length} new movies...`);
-            await wait(SEED_CONFIG.DB_OPERATION_DELAY);
+            transactionLogger.info(`Found ${movies.length} movies to process`);
 
-            // Step 4: Process all translations with controlled concurrency
+            const movieDataList = await runSpan(transactionLogger, 'Processing movie data', 'job.step', async () =>
+                Bluebird.map(
+                    movies,
+                    async (movie, index) => {
+                        if (index > 0) await wait(SEED_CONFIG.DB_OPERATION_DELAY / 2);
+                        return processMovieData(movie, dal, config.movieStatus);
+                    },
+                    { concurrency: SEED_CONFIG.MOVIE_PROCESSING_CONCURRENCY },
+                ),
+            );
+
+            const validMovieData = movieDataList.filter((data): data is MovieData => data !== null);
+
+            if (!validMovieData.length) {
+                transactionLogger.info('All movies already exist in DB.');
+                success = true;
+                return;
+            }
+
+            processedCount = validMovieData.length;
+
             await runSpan(transactionLogger, 'Processing movie translations', 'job.step', async () => {
-                transactionLogger.info('Processing movie translations');
                 await Bluebird.map(
                     validMovieData,
-                    async (movieData, index) => {
-                        if (index > 0) {
-                            await wait(25); // Small delay between translations
-                        }
-                        return processMovieTranslations(movieData, dal);
+                    (m, i) => (i > 0 ? wait(25) : Promise.resolve()).then(() => processMovieTranslations(m, dal)),
+                    {
+                        concurrency: SEED_CONFIG.TRANSLATION_PROCESSING_CONCURRENCY,
                     },
-                    { concurrency: SEED_CONFIG.TRANSLATION_PROCESSING_CONCURRENCY },
                 );
             });
 
             await wait(SEED_CONFIG.DB_OPERATION_DELAY);
 
-            // Step 5: Process genres with controlled concurrency
             await runSpan(transactionLogger, 'Processing movie genres', 'job.step', async () => {
-                transactionLogger.info('Processing movie genres');
                 await Bluebird.map(
                     validMovieData,
-                    async (movieData, index) => {
-                        if (index > 0) {
-                            await wait(50); // Delay between genre processing
-                        }
-                        return processMovieGenres(movieData, dal);
+                    (m, i) => (i > 0 ? wait(50) : Promise.resolve()).then(() => processMovieGenres(m, dal)),
+                    {
+                        concurrency: SEED_CONFIG.GENRE_PROCESSING_CONCURRENCY,
                     },
-                    { concurrency: SEED_CONFIG.GENRE_PROCESSING_CONCURRENCY },
                 );
             });
 
             await wait(SEED_CONFIG.DB_OPERATION_DELAY);
 
-            // Step 6: Process trailers with controlled concurrency
             await runSpan(transactionLogger, 'Processing movie trailers', 'job.step', async () => {
-                transactionLogger.info('Processing movie trailers');
                 await Bluebird.map(
                     validMovieData,
-                    async (movieData, index) => {
-                        if (index > 0) {
-                            await wait(25); // Small delay between trailers
-                        }
-                        return processMovieTrailers(movieData, dal);
+                    (m, i) => (i > 0 ? wait(25) : Promise.resolve()).then(() => processMovieTrailers(m, dal)),
+                    {
+                        concurrency: SEED_CONFIG.TRAILER_PROCESSING_CONCURRENCY,
                     },
-                    { concurrency: SEED_CONFIG.TRAILER_PROCESSING_CONCURRENCY },
                 );
             });
 
-            await wait(SEED_CONFIG.DB_OPERATION_DELAY * 2); // Longer delay before actors
+            await wait(SEED_CONFIG.DB_OPERATION_DELAY * 2);
 
-            // Step 7: Process actors sequentially (most DB intensive)
             await runSpan(transactionLogger, 'Processing movie cast', 'job.step', async () => {
-                transactionLogger.info('Processing movie cast with connection management');
                 await batchProcessActors(validMovieData, dal);
             });
 
-            const totalDuration = Date.now() - totalStartTime;
-            transactionLogger.info(
-                `Catalog refresh complete. Processed ${validMovieData.length} movies successfully.`,
-                { processedCount: validMovieData.length },
-            );
-            await sendCatalogRefreshEmail({
-                success: true,
-                processedCount: validMovieData.length,
-                durationMs: totalDuration,
-            });
-            transactionLogger.info(`Finished at: ${new Date().toISOString()}`);
-            transactionLogger.info(`Total catalog refresh time: ${formatDuration(totalDuration)}`, {
-                durationMs: totalDuration,
-            });
-            transactionLogger.info(`Average time per movie: ${formatDuration(totalDuration / validMovieData.length)}`, {
-                durationMs: totalDuration / validMovieData.length,
-            });
+            totalDuration = Date.now() - totalStartTime;
+            transactionLogger.info(`Catalog refresh complete. Processed ${processedCount} movies.`, { processedCount });
+
+            success = true;
         } catch (error) {
-            await sendCatalogRefreshEmail({
-                success: false,
-                errorMessage: error instanceof Error ? error.message : String(error),
-            });
-            const totalDuration = Date.now() - totalStartTime;
+            totalDuration = Date.now() - totalStartTime;
+            success = false;
+            errorMessage = error instanceof Error ? error.message : String(error);
+
             transactionLogger.error('Catalog refresh failed', error as Error);
-            transactionLogger.info(`Failed after: ${formatDuration(totalDuration)}`, {
+            transactionLogger.info(`Failed after: ${formatDuration(totalDuration)}`, { durationMs: totalDuration });
+
+            throw error;
+        } finally {
+            try {
+                await sendCatalogRefreshEmail({
+                    success,
+                    processedCount,
+                    durationMs: totalDuration,
+                    errorMessage,
+                });
+                transactionLogger.info(`Sent catalog refresh email (${success ? 'success' : 'failure'})`);
+            } catch (emailError) {
+                transactionLogger.error('Failed to send catalog refresh email', emailError as Error);
+            }
+
+            transactionLogger.info(`Job finished at: ${new Date().toISOString()}`);
+            totalDuration = Date.now() - totalStartTime;
+            transactionLogger.info(`Total duration: ${formatDuration(totalDuration)}`, {
                 durationMs: totalDuration,
             });
-            throw error;
         }
     };
 
     if (wrapWithTransaction) {
-        await withSentryTransaction('catalog:refresh:nowPlaying', executeSeed, { op: 'job' });
+        await withSentryTransaction(config.transactionName, executeSeed, { op: 'job' });
         return;
     }
 
     await executeSeed();
+}
+
+export async function refreshNowPlayingCatalog(options: CatalogRefreshOptions = {}): Promise<void> {
+    return runCatalogRefreshJob(
+        {
+            scope: 'catalog-refresh:now-playing',
+            transactionName: 'catalog:refresh:nowPlaying',
+            feedName: 'now-playing',
+            sourceTag: 'tmdb.now_playing',
+            movieStatus: MovieStatus.NOW_PLAYING,
+            fallbackStatus: MovieStatus.LEFT_CINEMAS,
+            fetchMovies: () =>
+                tmdb.movies.nowPlaying({
+                    language: SEED_CONFIG.DEFAULT_LANGUAGES.PRIMARY,
+                    region: SEED_CONFIG.TMDB_REGION,
+                }),
+        },
+        options,
+    );
+}
+
+export async function refreshUpcomingCatalog(options: CatalogRefreshOptions = {}): Promise<void> {
+    return runCatalogRefreshJob(
+        {
+            scope: 'catalog-refresh:upcoming',
+            transactionName: 'catalog:refresh:upcoming',
+            feedName: 'upcoming',
+            sourceTag: 'tmdb.upcoming',
+            movieStatus: MovieStatus.UPCOMING,
+            fetchMovies: () =>
+                tmdb.movies.upcoming({
+                    language: SEED_CONFIG.DEFAULT_LANGUAGES.PRIMARY,
+                    region: SEED_CONFIG.TMDB_REGION,
+                }),
+        },
+        options,
+    );
 }
 
 // Utility function for targeted refresh
@@ -322,17 +364,23 @@ export async function refreshSpecificMovie(tmdbId: number, options: CatalogRefre
     await executeSeed();
 }
 
-// Run as a script
-if (require.main === module) {
-    const cliLogger = logger.scope('catalog-refresh:cli');
+const isRunDirectly = basename(fileURLToPath(import.meta.url)) === 'seed.ts';
 
-    refreshNowPlayingCatalog()
+// Run as a script
+if (isRunDirectly) {
+    const cliLogger = logger.scope('catalog-refresh:cli');
+    const feedArg = process.argv[2] === 'upcoming' ? 'upcoming' : 'now-playing';
+    const runner = feedArg === 'upcoming' ? refreshUpcomingCatalog : refreshNowPlayingCatalog;
+
+    cliLogger.info(`Starting CLI catalog refresh for ${feedArg}`);
+
+    runner()
         .then(async () => {
             cliLogger.info('Disconnecting from database...');
             await prisma.$disconnect();
         })
         .catch(async (err) => {
-            cliLogger.error('Daily catalog refresh failed', err as Error);
+            cliLogger.error(`Catalog refresh (${feedArg}) failed`, err as Error);
             await prisma.$disconnect();
             process.exit(1);
         });

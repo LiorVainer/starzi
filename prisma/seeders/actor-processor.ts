@@ -1,4 +1,4 @@
-import { tmdb } from '@/lib/clients';
+import { tmdb } from '@/lib/api-clients';
 import { Language, Prisma } from '@prisma/client';
 import Bluebird from 'bluebird';
 import type { DAL } from '@/dal';
@@ -267,4 +267,3 @@ export async function batchProcessActors(movieDataList: MovieData[], dal: DAL): 
         },
     );
 }
-

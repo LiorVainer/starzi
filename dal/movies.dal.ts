@@ -1,4 +1,4 @@
-import { Language, Prisma, PrismaClient } from '@prisma/client';
+import { Language, MovieStatus, Prisma, PrismaClient } from '@prisma/client';
 import { FullyPopulatedMovie, MovieWithLanguageTranslation } from '@/models/movies.model';
 
 /**
@@ -314,5 +314,28 @@ export class MoviesDAL {
      */
     async countMovies(where?: Prisma.MovieWhereInput): Promise<number> {
         return this.prisma.movie.count({ where });
+    }
+
+    async markMissingMoviesAsFallback(
+        currentStatus: MovieStatus,
+        fallbackStatus: MovieStatus,
+        tmdbIdsToKeep: number[],
+    ): Promise<number> {
+        const where: Prisma.MovieWhereInput = {
+            status: currentStatus,
+        };
+
+        if (tmdbIdsToKeep.length) {
+            where.tmdbId = { notIn: tmdbIdsToKeep };
+        }
+
+        const result = await this.prisma.movie.updateMany({
+            where,
+            data: {
+                status: fallbackStatus,
+            },
+        });
+
+        return result.count;
     }
 }
