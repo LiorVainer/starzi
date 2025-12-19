@@ -247,9 +247,13 @@ export const searchUpcomingMovies = async (filters: MovieFilters) => {
     }
 
     // 🧮 Otherwise, continue with DB + TMDB lookup
+    const oneYearFromNow = new Date();
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+
     const where: Prisma.MovieWhereInput = {
         releaseDate: {
             gte: new Date(),
+            lte: oneYearFromNow,
         },
         status: 'UPCOMING',
     };

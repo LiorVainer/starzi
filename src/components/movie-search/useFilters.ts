@@ -20,7 +20,7 @@ const DEFAULT_PAGE_SIZE = 24;
 const DEFAULT_PAGE = 1;
 
 export type TabValue = 'now-playing' | 'upcoming';
-const TAB_VALUES: TabValue[] = ['now-playing', 'upcoming'];
+export const TAB_VALUES = ['now-playing', 'upcoming'] as const;
 const DEFAULT_TAB: TabValue = 'now-playing' as const;
 
 type RawFilters = {
@@ -38,7 +38,7 @@ const filterParsers = {
     sort: parseAsStringEnum<SortValue>([...SORT_VALUES]).withDefault(DEFAULT_SORT),
     genres: parseAsArrayOf(parseAsInteger).withDefault([]),
     page: parseAsInteger.withDefault(DEFAULT_PAGE),
-    tab: parseAsStringEnum<TabValue>(TAB_VALUES).withDefault(DEFAULT_TAB),
+    tab: parseAsStringEnum<TabValue>([...TAB_VALUES]).withDefault(DEFAULT_TAB),
 } satisfies UseQueryStatesKeysMap<RawFilters>;
 
 const DEFAULT_SET_OPTIONS = {
