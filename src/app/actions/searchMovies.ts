@@ -110,7 +110,7 @@ export const searchNowPlayingMovies = async (filters: MovieFilters) => {
         searchDebounced,
         actorName = '',
         actorNameDebounced,
-        sort = 'rating:desc',
+        sort = 'releaseDate:desc',
         selectedGenres = [],
         page = 1,
         pageSize = 24,
@@ -181,7 +181,7 @@ export const searchNowPlayingMovies = async (filters: MovieFilters) => {
         }
     }
 
-    const [field, direction] = (sort || 'rating:desc').split(':') as [
+    const [field, direction] = (sort || 'releaseDate:desc').split(':') as [
         'rating' | 'votes' | 'releaseDate',
         'asc' | 'desc',
     ];
@@ -216,7 +216,7 @@ export const searchUpcomingMovies = async (filters: MovieFilters) => {
         searchDebounced,
         actorName = '',
         actorNameDebounced,
-        sort = 'rating:desc',
+        sort = 'releaseDate:desc',
         selectedGenres = [],
         page = 1,
         pageSize = 24,
@@ -291,7 +291,7 @@ export const searchUpcomingMovies = async (filters: MovieFilters) => {
         }
     }
 
-    const [field, direction] = (sort || 'rating:desc').split(':') as [
+    const [field, direction] = (sort || 'releaseDate:desc').split(':') as [
         'rating' | 'votes' | 'releaseDate',
         'asc' | 'desc',
     ];

@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo } from 'react';
 import {
-    debounce,
     parseAsArrayOf,
     parseAsInteger,
     parseAsString,
@@ -15,7 +14,7 @@ import { SORT_VALUES, SortValue } from '@/constants/sort.const';
 import type { Language } from '@prisma/client';
 import type { MovieFilters } from '@/app/actions/searchMovies';
 
-const DEFAULT_SORT: SortValue = 'rating:desc' as const;
+const DEFAULT_SORT: SortValue = 'releaseDate:desc' as const;
 const DEFAULT_PAGE_SIZE = 24;
 const DEFAULT_PAGE = 1;
 
@@ -188,7 +187,7 @@ export function useFiltersState(language: Language): FiltersState {
         [setRawFilters],
     );
 
-    const { search, actor, sort, genres, page, tab } = rawFilters;
+    const { search, actor, sort, genres, page } = rawFilters;
 
     const filters = useMemo<MovieFilters>(
         () => ({
