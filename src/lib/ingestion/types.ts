@@ -1,5 +1,5 @@
 import { Language, MovieStatus, Prisma } from '@prisma/client';
-import { Movie as TmdbMovie, MovieDetails, PersonDetails, Video } from 'tmdb-ts';
+import { MovieDetails, PersonDetails, Translation, Video } from 'tmdb-ts';
 
 export type IngestionConfig = {
     language: Language;
@@ -14,15 +14,20 @@ export type MovieFeed = {
 };
 
 export type FetchedMovie = {
-    base: TmdbMovie;
+    base: MovieFeed;
     details: MovieDetails;
-    translations: MovieDetails[];
-    credits: { cast: PersonDetails[] };
+    translations: Translation[];
+    credits: { cast: FetchedCastMember[] };
     videos: Video[];
 };
 
+export type FetchedCastMember = PersonDetails & {
+    character: string;
+    order: number;
+};
+
 export type MoviePayload = {
-    create: Prisma.MovieCreateInput;
+    create: Prisma.MovieCreateManyInput;
     translations: Prisma.MovieTranslationCreateManyInput[];
     trailers: Prisma.TrailerCreateManyInput[];
     genres: number[];

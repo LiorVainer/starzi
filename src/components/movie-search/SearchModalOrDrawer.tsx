@@ -39,7 +39,6 @@ export function SearchModalOrDrawer({ open, onOpenChange }: SearchModalOrDrawerP
                         </DrawerClose>
                     </DrawerHeader>
                     <div className='flex-1 overflow-y-auto px-4 pb-6 pt-4 flex flex-col gap-4 w-full items-center'>
-                        {isLoading && <Spinner />}
                         <SearchModalContent />
                     </div>
                 </DrawerContent>

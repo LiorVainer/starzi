@@ -43,9 +43,11 @@ function MovieGridContent({
 
     return (
         <div className='h-full flex flex-col gap-4 lg:py-8 scrollable w-full'>
-            <div className='w-full'>
-                <SelectedGenreChips genres={genres} selected={selectedGenres} onRemove={toggleGenre} />
-            </div>
+            {selectedGenres.length > 0 && (
+                <div className='w-full'>
+                    <SelectedGenreChips genres={genres} selected={selectedGenres} onRemove={toggleGenre} />
+                </div>
+            )}
 
             {isError && <div className='text-destructive'>{t('errorLoading')}</div>}
 

@@ -3,16 +3,16 @@ import { logger } from '@/lib/sentry/logger';
 import { withSentrySpan } from '@/lib/sentry/withSpan';
 import { tmdb } from '@/lib/api-clients';
 import { SEED_CONFIG } from '@/constants/seed-config';
-import { CastPayload, FetchedMovie, IngestionConfig, MovieFeed, MoviePayload } from './types';
+import { CastPayload, FetchedCastMember, FetchedMovie, IngestionConfig, MovieFeed, MoviePayload } from './types';
 import { chunkArray } from './utils';
 import { Language, Prisma } from '@prisma/client';
 import Bluebird from 'bluebird';
-import { PersonDetails } from 'tmdb-ts';
 
 const ingestionLogger = logger.scope('ingestion');
 
 export async function ingestMoviesBatch(dal: DAL, moviesFeed: MovieFeed[], config: IngestionConfig) {
     return withSentrySpan('ingest.batch', 'Ingest movies batch', async () => {
+        ingestionLogger.info('Ingesting movies batch', { count: moviesFeed.length, status: config.movieStatus });
         const chunks = chunkArray(moviesFeed, SEED_CONFIG.MOVIE_PROCESSING_CONCURRENCY);
         for (const chunk of chunks) {
             await processMovieChunk(dal, chunk, config);
@@ -37,9 +37,17 @@ async function fetchMoviesDetails(movies: MovieFeed[]): Promise<FetchedMovie[]> 
                 tmdb.movies.videos(movie.tmdbId),
             ]);
 
-            const castWithDetails: PersonDetails[] = await Bluebird.map(
+            const castWithDetails: FetchedCastMember[] = await Bluebird.map(
                 credits.cast?.slice(0, SEED_CONFIG.MAX_CAST_MEMBERS_PER_MOVIE) ?? [],
-                (person) => tmdb.people.details(person.id),
+                async (person) => {
+                    const personDetails = await tmdb.people.details(person.id);
+
+                    return {
+                        ...personDetails,
+                        character: person.character,
+                        order: person.order,
+                    };
+                },
                 { concurrency: 5 },
             );
 
@@ -49,7 +57,7 @@ async function fetchMoviesDetails(movies: MovieFeed[]): Promise<FetchedMovie[]> 
                 translations: translations.translations,
                 credits: { ...credits, cast: castWithDetails },
                 videos: videos.results,
-            } as FetchedMovie;
+            };
         },
         { concurrency: SEED_CONFIG.MOVIE_PROCESSING_CONCURRENCY },
     );
@@ -64,7 +72,8 @@ async function buildMoviePayloads(fetchedMovies: FetchedMovie[], config: Ingesti
         const translationEn = translations.find((t) => t.iso_639_1 === 'en');
         const translationHe = translations.find((t) => t.iso_639_1 === 'he');
 
-        const createPayload: Prisma.MovieCreateInput = {
+        const createPayload: Prisma.MovieCreateManyInput = {
+            id: details.imdb_id!,
             imdbId: details.imdb_id!,
             tmdbId: details.id,
             status: config.movieStatus,
@@ -88,10 +97,7 @@ async function buildMoviePayloads(fetchedMovies: FetchedMovie[], config: Ingesti
                 title: translationHe?.data.title || details.title,
                 description: translationHe?.data.overview || details.overview,
                 originalTitle: details.original_title,
-                posterUrl:
-                    translationHe?.data.poster_path || details.poster_path
-                        ? `${SEED_CONFIG.TMDB_POSTER_BASE_URL}${translationHe?.data.poster_path || details.poster_path}`
-                        : null,
+                posterUrl: details.poster_path ? `${SEED_CONFIG.TMDB_POSTER_BASE_URL}${details.poster_path}` : null,
             },
         ];
 
@@ -100,7 +106,7 @@ async function buildMoviePayloads(fetchedMovies: FetchedMovie[], config: Ingesti
             .map((t) => ({
                 movieId: createPayload.imdbId,
                 title: t.name,
-                key: t.key,
+                youtubeId: t.key,
                 language: Language.en_US, // TMDB videos are not localized well
                 url: `https://www.youtube.com/watch?v=${t.key}`,
             }));
