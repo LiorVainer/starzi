@@ -62,7 +62,7 @@
     "dotenv": "^17.2.3",
     "framer-motion": "^12.23.22",
     "import-in-the-middle": "^2.0.0",
-    "inngest": "^3.44.3",
+    "inngest": "^3.54.0",
     "lodash.chunk": "^4.2.0",
     "lucide-react": "^0.483.0",
     "motion": "^12.23.22",
