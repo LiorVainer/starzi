@@ -33,6 +33,11 @@ export class ActorsDAL {
         return this.prisma.actor.findMany({ where: { tmdbId: { in: tmdbIds } } });
     }
 
+    async findManyByImdbIds(imdbIds: string[]) {
+        if (!imdbIds.length) return [];
+        return this.prisma.actor.findMany({ where: { imdbId: { in: imdbIds } } });
+    }
+
     async upsertTranslation(
         actorId: string,
         language: Language,
@@ -60,7 +65,7 @@ export class ActorsDAL {
         }
     }
 
-    async upsertManyBase(actors: Prisma.ActorCreateInput[]) {
+    async upsertManyBase(actors: Prisma.ActorCreateManyInput[]) {
         return this.prisma.$transaction(async (tx) => {
             const existing = await tx.actor.findMany({
                 where: {
@@ -82,9 +87,10 @@ export class ActorsDAL {
             }
 
             for (const actor of toUpdate) {
+                const { id: _id, ...actorData } = actor;
                 await tx.actor.update({
                     where: { imdbId: actor.imdbId },
-                    data: actor,
+                    data: actorData,
                 });
             }
         });

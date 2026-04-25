@@ -35,5 +35,4 @@ async function handler() {
 // ✅  use signature verification in prod, bypass locally
 export const POST = process.env.NODE_ENV === 'production' ? verifySignatureAppRouter(handler) : handler;
 
-// Optional: allow GET for manual local testing
-export const GET = handler;
+export const GET = () => NextResponse.json({ ok: true, message: 'Use POST to run the catalog refresh.' });

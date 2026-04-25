@@ -114,8 +114,10 @@ async function buildMoviePayloads(fetchedMovies: FetchedMovie[], config: Ingesti
         const castPayloads: CastPayload[] = [];
         if (credits.cast) {
             for (const person of credits.cast) {
-                const actorCreate: Prisma.ActorCreateInput = {
-                    imdbId: person.imdb_id || `tmdb-${person.id}`, // Use real imdb_id, fallback to tmdb-id
+                const actorId = person.imdb_id || `tmdb-${person.id}`;
+                const actorCreate: Prisma.ActorCreateManyInput = {
+                    id: actorId,
+                    imdbId: actorId, // Use real imdb_id, fallback to tmdb-id
                     tmdbId: person.id,
                     profileUrl: person.profile_path
                         ? `${SEED_CONFIG.TMDB_POSTER_BASE_URL}${person.profile_path}`
@@ -166,15 +168,33 @@ async function writeToDatabase(dal: DAL, payloads: MoviePayload[], config: Inges
     const translationsToCreate = payloads.flatMap((p) => p.translations);
     const trailersToCreate = payloads.flatMap((p) => p.trailers);
     const actorsToCreate = payloads.flatMap((p) => p.cast.map((c) => c.create));
-    const actorTranslationsToCreate = payloads.flatMap((p) => p.cast.flatMap((c) => c.translations));
-    const castConnectionsToCreate = payloads.flatMap((p) =>
-        p.cast.map((c) => ({ ...c.connection, actorId: c.create.imdbId })),
-    );
 
     await dal.movies.createManyBase(moviesToCreate);
     await dal.movies.createTranslationsBulk(translationsToCreate);
     await dal.movies.bulkInsertTrailers(trailersToCreate);
     await dal.actors.upsertManyBase(actorsToCreate);
+    const actors = await dal.actors.findManyByImdbIds(actorsToCreate.map((actor) => actor.imdbId));
+    const actorIdByImdbId = new Map(actors.map((actor) => [actor.imdbId, actor.id]));
+    const getActorId = (imdbId: string) => {
+        const actorId = actorIdByImdbId.get(imdbId);
+        if (!actorId) {
+            throw new Error(`Actor was not created for imdbId: ${imdbId}`);
+        }
+        return actorId;
+    };
+
+    const actorTranslationsToCreate = payloads.flatMap((p) =>
+        p.cast.flatMap((c) =>
+            c.translations.map((translation) => ({
+                ...translation,
+                actorId: getActorId(c.create.imdbId),
+            })),
+        ),
+    );
+    const castConnectionsToCreate = payloads.flatMap((p) =>
+        p.cast.map((c) => ({ ...c.connection, actorId: getActorId(c.create.imdbId) })),
+    );
+
     await dal.actors.createTranslationsBulk(actorTranslationsToCreate);
     await dal.actors.bulkConnectCast(castConnectionsToCreate);
 

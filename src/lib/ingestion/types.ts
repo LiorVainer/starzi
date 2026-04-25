@@ -35,7 +35,7 @@ export type MoviePayload = {
 };
 
 export type CastPayload = {
-    create: Prisma.ActorCreateInput;
+    create: Prisma.ActorCreateManyInput;
     translations: Prisma.ActorTranslationCreateManyInput[];
     connection: Omit<Prisma.CastCreateManyInput, 'actorId'>;
 };
