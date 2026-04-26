@@ -9,8 +9,10 @@ import { useTranslations } from 'next-intl';
 import { FiltersProvider, useFilters } from '@/components/movie-search/FiltersContext';
 import { SelectedGenreChips } from '@/components/movie-search/SelectedGenreChips';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
-import BadgeTabs, { type BadgeTabItem } from '@/components/ui/badge-tabs';
-import { CalendarDays, Clapperboard } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { MovieTabsControl } from '@/components/movie-search/MovieTabsControl';
+import { SearchX } from 'lucide-react';
 import type { TabValue } from './useFilters';
 import type { MovieWithLanguageTranslation } from '@/models/movies.model';
 
@@ -42,9 +44,10 @@ function MovieGridContent({
     tMovie,
 }: MovieGridContentProps) {
     const selectedGenresKey = selectedGenres.join(',');
+    const clearSelectedGenres = () => selectedGenres.forEach(toggleGenre);
 
     return (
-        <div className='scrollable h-full w-full overflow-y-auto overscroll-contain pb-28 pt-4 sm:pb-6 lg:pt-8'>
+        <div className='scrollable h-full w-full overflow-y-auto overscroll-contain pb-16 pt-4 sm:pb-6 lg:pt-8'>
             {selectedGenres.length > 0 && (
                 <div className='mb-4 w-full'>
                     <SelectedGenreChips genres={genres} selected={selectedGenres} onRemove={toggleGenre} />
@@ -58,6 +61,25 @@ function MovieGridContent({
                     {Array.from({ length: 9 }).map((_, i) => (
                         <CollapsedMovieCardSkeleton key={i} />
                     ))}
+                </div>
+            ) : items.length === 0 ? (
+                <div className='flex min-h-full items-center justify-center px-4 py-16 sm:py-24'>
+                    <Empty className='w-full max-w-md'>
+                        <EmptyHeader>
+                            <EmptyMedia variant='icon'>
+                                <SearchX aria-hidden='true' />
+                            </EmptyMedia>
+                            <EmptyTitle>{t('noResultsTitle')}</EmptyTitle>
+                            <EmptyDescription>{t('noResults')}</EmptyDescription>
+                        </EmptyHeader>
+                        {selectedGenres.length > 0 && (
+                            <EmptyContent className='flex-row justify-center gap-2'>
+                                <Button type='button' variant='outline' size='sm' onClick={clearSelectedGenres}>
+                                    {t('clearFilters')}
+                                </Button>
+                            </EmptyContent>
+                        )}
+                    </Empty>
                 </div>
             ) : (
                 <div className='flex min-h-full flex-col'>
@@ -93,10 +115,6 @@ function MovieGridContent({
                                 <MovieCard ctaText={tMovie('details')} movie={movie} />
                             </motion.div>
                         ))}
-
-                        {items.length === 0 && !isFetching && (
-                            <div className='text-sm text-muted-foreground'>{t('noResults')}</div>
-                        )}
                     </motion.div>
                 </div>
             )}
@@ -123,10 +141,6 @@ export function MovieSearchContent() {
     } = useFilters();
 
     const items = moviesData?.items ?? [];
-    const tabItems: BadgeTabItem[] = [
-        { value: 'now-playing', label: t('nowPlaying'), icon: Clapperboard },
-        { value: 'upcoming', label: t('upcoming'), icon: CalendarDays },
-    ];
 
     const { data: genresData } = useQuery({
         queryKey: ['genres', language],
@@ -156,10 +170,6 @@ export function MovieSearchContent() {
             onValueChange={(value) => setTab(value as TabValue)}
             className='relative flex h-full min-h-0 w-full flex-col'
         >
-            <div className='hidden shrink-0 justify-start pb-5 pt-6 sm:flex lg:pt-8'>
-                <BadgeTabs items={tabItems} activeValue={tab} />
-            </div>
-
             <div className='min-h-0 flex-1 overflow-hidden'>
                 <TabsContent value='now-playing' className='m-0 h-full w-full'>
                     <MovieGridContent {...gridProps} />
@@ -171,7 +181,10 @@ export function MovieSearchContent() {
             </div>
 
             <div className='fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:hidden'>
-                <BadgeTabs items={tabItems} activeValue={tab} className='justify-center' triggerClassName='px-5' />
+                <MovieTabsControl
+                    tabsClassName='h-10 justify-center bg-background/55 p-0.5 backdrop-blur-md'
+                    triggerClassName='h-8 text-xs'
+                />
             </div>
         </Tabs>
     );
