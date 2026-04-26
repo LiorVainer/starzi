@@ -4,8 +4,13 @@ import { useState, useCallback } from 'react';
 import { FiltersProvider } from './FiltersContext';
 import { SearchButton } from './SearchButton';
 import { SearchModalOrDrawer } from './SearchModalOrDrawer';
+import { cn } from '@/lib/utils';
 
-export function SearchLauncher() {
+type SearchLauncherProps = {
+    className?: string;
+};
+
+export function SearchLauncher({ className }: SearchLauncherProps) {
     const [open, setOpen] = useState(false);
 
     const handleOpen = useCallback(() => {
@@ -18,7 +23,9 @@ export function SearchLauncher() {
 
     return (
         <FiltersProvider>
-            <SearchButton onClick={handleOpen} />
+            <div className={cn('min-w-0', className)}>
+                <SearchButton onClick={handleOpen} />
+            </div>
             <SearchModalOrDrawer open={open} onOpenChange={handleOpenChange} />
         </FiltersProvider>
     );

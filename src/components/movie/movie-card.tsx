@@ -3,9 +3,9 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { useOutsideClick } from '@/hooks/use-outside-click';
 import type { MovieWithLanguageTranslation } from '@/models/movies.model';
-import CollapsedMovieCard from './movie-card-collapsed';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useOverlayState } from '@/hooks/use-overlay-state';
+import CollapsedMovieCard from './movie-card-collapsed';
 
 export type MovieCardProps = {
     movie: MovieWithLanguageTranslation;
@@ -64,6 +64,13 @@ export default function MovieCard({ movie, className }: MovieCardProps) {
                 className={className}
                 onClickAction={handleCardClick}
             />
+
+            {/*<MovieVerticalCard*/}
+            {/*    onClick={handleCardClick}*/}
+            {/*    title={movie.title}*/}
+            {/*    posterUrl={imgSrc}*/}
+            {/*    imdbRating={movie.rating}*/}
+            {/*/>*/}
         </div>
     );
 }

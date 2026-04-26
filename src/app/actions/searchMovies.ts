@@ -2,7 +2,7 @@
 
 import { redis } from '@/lib/upstash';
 import crypto from 'crypto';
-import { omdb, tmdb } from '@/lib/clients';
+import { omdb, tmdb } from '@/lib/api-clients';
 import { prisma } from '@/lib/prisma';
 import { MoviesDAL } from '@/dal';
 import { Language, Prisma } from '@prisma/client';
@@ -110,7 +110,7 @@ export const searchNowPlayingMovies = async (filters: MovieFilters) => {
         searchDebounced,
         actorName = '',
         actorNameDebounced,
-        sort = 'rating:desc',
+        sort = 'releaseDate:desc',
         selectedGenres = [],
         page = 1,
         pageSize = 24,
@@ -181,7 +181,117 @@ export const searchNowPlayingMovies = async (filters: MovieFilters) => {
         }
     }
 
-    const [field, direction] = (sort || 'rating:desc').split(':') as [
+    const [field, direction] = (sort || 'releaseDate:desc').split(':') as [
+        'rating' | 'votes' | 'releaseDate',
+        'asc' | 'desc',
+    ];
+    const orderBy = [{ [field]: direction }] as Prisma.MovieOrderByWithRelationInput[];
+
+    const skip = (Math.max(1, page) - 1) * Math.max(1, pageSize);
+    const take = Math.max(1, Math.min(100, pageSize));
+
+    const [items, total] = await Promise.all([
+        moviesDAL.getMoviesWithLanguageTranslation(language, { where, orderBy, skip, take }),
+        moviesDAL.countMovies(where),
+    ]);
+
+    const result = {
+        items,
+        total,
+        page,
+        pageSize: take,
+        totalPages: Math.ceil(total / take) || 1,
+    };
+
+    await redis.set(key, result, { ex: 60 * 60 * 12 });
+
+    console.log(`[cache set] ${key}`);
+
+    return result;
+};
+
+export const searchUpcomingMovies = async (filters: MovieFilters) => {
+    const {
+        search = '',
+        searchDebounced,
+        actorName = '',
+        actorNameDebounced,
+        sort = 'releaseDate:desc',
+        selectedGenres = [],
+        page = 1,
+        pageSize = 24,
+        language = Language.he_IL,
+    } = filters ?? {};
+
+    const q = (searchDebounced ?? search).trim();
+    const actorQuery = (actorNameDebounced ?? actorName ?? '').trim();
+
+    // 🔑 Build a stable cache key (based on filters + locale + status)
+    const key = `search:upcoming:${language}:${crypto
+        .createHash('md5')
+        .update(
+            JSON.stringify({
+                q,
+                actorQuery,
+                sort,
+                selectedGenres,
+            }),
+        )
+        .digest('hex')}`;
+
+    // 🧠 Try Redis cache first
+    const cached = await redis.get<NowPlayingMoviesSearchResult | undefined>(key);
+    if (cached) {
+        console.log(`[cache hit] ${key}`);
+        return cached;
+    }
+
+    // 🧮 Otherwise, continue with DB + TMDB lookup
+    const oneYearFromNow = new Date();
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+
+    const where: Prisma.MovieWhereInput = {
+        releaseDate: {
+            gte: new Date(),
+            lte: oneYearFromNow,
+        },
+        status: 'UPCOMING',
+    };
+
+    if (q.length > 0) {
+        where.translations = {
+            some: {
+                OR: [
+                    { title: { contains: q, mode: 'insensitive' } },
+                    { originalTitle: { contains: q, mode: 'insensitive' } },
+                ],
+            },
+        };
+    }
+
+    if (selectedGenres.length > 0) {
+        where.genres = { some: { tmdbId: { in: selectedGenres } } };
+    }
+
+    if (actorQuery.length > 0) {
+        try {
+            const actorSearch = await tmdb.search.people({ query: actorQuery, language: 'he-IL' });
+            const actorMatch = actorSearch.results[0];
+            if (actorMatch) {
+                const credits = await tmdb.people.movieCredits(actorMatch.id);
+                const movieIds = (credits.cast ?? [])
+                    .map((entry) => entry.id)
+                    .filter((id): id is number => typeof id === 'number');
+                where.tmdbId = movieIds.length > 0 ? { in: movieIds } : { in: [-1] };
+            } else {
+                where.tmdbId = { in: [-1] };
+            }
+        } catch (error) {
+            console.error('searchUpcomingMovies: failed to resolve actor filter', error);
+        }
+    }
+
+    const [field, direction] = (sort || 'releaseDate:desc').split(':') as [
         'rating' | 'votes' | 'releaseDate',
         'asc' | 'desc',
     ];

@@ -1,12 +1,12 @@
 'use client';
 
-import { createContext, useContext } from 'react';
 import type { PropsWithChildren } from 'react';
+import { createContext, useContext } from 'react';
 import { useLocale } from 'next-intl';
 import { mapLocaleToLanguage } from '@/constants/languages.const';
-import { useFiltersState, type FiltersState } from './useFilters';
-import { useQuery } from '@tanstack/react-query';
-import { searchNowPlayingMovies } from '@/app/actions/searchMovies';
+import { type FiltersState, useFiltersState } from './useFilters';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { searchNowPlayingMovies, searchUpcomingMovies } from '@/app/actions/searchMovies';
 
 type QueryState = {
     isLoading: boolean;
@@ -35,14 +35,18 @@ export function FiltersProvider({ children }: PropsWithChildren) {
                 page: filters.page,
                 pageSize: filters.pageSize,
                 language: language,
+                tab: filters.tab,
             },
         ],
-        queryFn: () =>
-            searchNowPlayingMovies({
+        queryFn: () => {
+            const searchFn = filters.tab === 'upcoming' ? searchUpcomingMovies : searchNowPlayingMovies;
+            return searchFn({
                 ...filters.filters,
                 search: filters.searchDebounced,
                 actorName: filters.actorDebounced,
-            }),
+            });
+        },
+        placeholderData: keepPreviousData,
     });
 
     return (

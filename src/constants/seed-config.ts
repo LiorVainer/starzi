@@ -1,3 +1,5 @@
+import { Language } from '@prisma/client';
+
 // Seeding configuration constants with reduced concurrency to prevent connection pool exhaustion
 export const SEED_CONFIG = {
     // Reduced concurrency limits to avoid database connection pool exhaustion
@@ -17,8 +19,14 @@ export const SEED_CONFIG = {
     TMDB_POSTER_BASE_URL: 'https://image.tmdb.org/t/p/w300',
     YOUTUBE_BASE_URL: 'https://www.youtube.com/watch?v=',
 
-    // Languages
+    // Languages (Prisma enum format)
     DEFAULT_LANGUAGES: {
+        PRIMARY: Language.he_IL,
+        SECONDARY: Language.en_US,
+    },
+
+    // TMDB API language codes (for API calls)
+    TMDB_LANGUAGES: {
         PRIMARY: 'he-IL' as const,
         SECONDARY: 'en-US' as const,
     },

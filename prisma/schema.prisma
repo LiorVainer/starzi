@@ -86,6 +86,7 @@ enum TriggerConditionType {
 enum MovieStatus {
   NOW_PLAYING
   UPCOMING
+  LEFT_CINEMAS
 }
 
 enum Language {
